@@ -3,8 +3,12 @@ from PyQt5.Qsci import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 from pathlib import Path
+
 import sys
 import os
+import keyword
+import pkgutil
+
 
 class MainWindow(QMainWindow):
     
@@ -47,6 +51,16 @@ class MainWindow(QMainWindow):
         openFolder.setShortcut("Ctrl+Shift+O")
         openFolder.triggered.connect(self.OpenFolder)
         
+        fileMenu.addSeparator()
+        
+        saveFile : QAction = fileMenu.addAction("Save")
+        saveFile.setShortcut("Ctrl+S")
+        saveFile.triggered.connect(self.SaveFile)
+        
+        saveFileAs : QAction = fileMenu.addAction("Save As")
+        saveFileAs.setShortcut("Ctrl+Shift+S")
+        saveFileAs.triggered.connect(self.SaveAs)
+        
         editMenu : QMenu = menuBar.addMenu("Edit")
         
         copyAction : QAction = editMenu.addAction("Copy")
@@ -56,15 +70,59 @@ class MainWindow(QMainWindow):
         pass
     
     def NewFile(self) -> None:
+        self.SetNewTab(None, True)
+        pass
+    
+    def SaveFile(self) -> None:
+        if self.currentFile is None and self.tabView.count() > 0:
+            self.SaveAs()
+        
+        editor : QWidget = self.tabView.currentWidget()
+        self.currentFile.write_text(editor.text())
+        self.statusBar().showMessage(f"Saved {self.currentFile.name}", 2000)
+        pass
+    
+    def SaveAs(self) -> None:
+        editor : QWidget = self.tabView.currentWidget()
+        if editor is None:
+            return
+
+        filePath : str = QFileDialog.getSaveFileName(self, "Save As", os.getcwd())[0]
+        if filePath == "":
+            self.statusBar().showMessage("Cancelled", 2000)
+            return
+
+        path : Path = Path(filePath)
+        path.write_text(editor.text())
+        self.tabView.setTabText(self.tabView.currentIndex(), path.name)
+        self.statusBar().showMessage(f"Saved {path.name}", 2000)
+        self.currentFile = path
         pass
     
     def OpenFile(self) -> None:
+        ops : QFileDialog.Options = QFileDialog.Options()
+        newFile, _ = QFileDialog.getOpenFileName(self, "Pick a file", "", "All files (*);;Python Files (*.py)", options=ops)
+        if newFile == "":
+            self.statusBar().showMessage("Cancelled", 2000)
+            return
+        
+        f : Path = Path(newFile)
+        self.SetNewTab(f)
         pass
     
     def OpenFolder(self) -> None:
+        ops : QFileDialog.Options = QFileDialog.Options()
+        newFolder = QFileDialog.getExistingDirectory(self, "Pick a folder", "", options=ops)
+        if newFolder:
+            self.model.setRootPath(newFolder)
+            self.treeView.setRootIndex(self.model.index(newFolder))
+            self.statusBar().showMessage(f"Opened {newFolder}", 2000)
         pass
     
     def CopyAction(self) -> None:
+        editor : QWidget = self.tabView.currentWidget()
+        if editor is not None:
+            editor.copy()
         pass
     
     def SetupBody(self) -> None:
@@ -155,6 +213,7 @@ class MainWindow(QMainWindow):
         self.tabView.setTabsClosable(True)
         self.tabView.setMovable(True)
         self.tabView.setDocumentMode(True)
+        self.tabView.tabCloseRequested.connect(self.CloseTab)
         
         self.hSplit.addWidget(self.treeFrame)
         self.hSplit.addWidget(self.tabView)
@@ -164,8 +223,11 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(bodyFrame)
         pass
     
-    def ShowHideTab(self):
-        
+    def ShowHideTab(self) -> None:
+        pass
+    
+    def CloseTab(self, index : int) -> None:
+        self.tabView.removeTab(index)
         pass
     
     def TreeViewContextMenu(self, pos : int) -> None:
@@ -188,34 +250,77 @@ class MainWindow(QMainWindow):
         editor.setIndentationsUseTabs(False)
         editor.setAutoIndent(True)
         
+        editor.setAutoCompletionSource(QsciScintilla.AutoCompletionSource.AcsAll)
+        editor.setAutoCompletionThreshold(1)
+        editor.setAutoCompletionCaseSensitivity(False)
+        editor.setAutoCompletionUseSingle(QsciScintilla.AcusNever)
+        
+        #editor.setCaretForegroundColor(QColor("#dedcdc"))
+        editor.setCaretLineVisible(True)
+        editor.setCaretWidth(2)
+        #editor.setCaretLineBackgroundColor(QColor("#2c313c"))
+        
         editor.setEolMode(QsciScintilla.EolUnix)
         editor.setEolVisibility(False)
         
-        editor.setLexer(None)
+        self.pyLexer : QsciLexerPython = QsciLexerPython()
+        self.pyLexer.setDefaultFont(self.window_font)
+        
+        self.api : QsciAPIs = QsciAPIs(self.pyLexer)
+        for key in keyword.kwlist + dir(__builtins__):
+            self.api.add(key)
+        
+        for _, name, _ in pkgutil.iter_modules():
+            self.api.add(name)
+        
+        self.api.prepare()
+        editor.setLexer(self.pyLexer)
+        
+        editor.setMarginType(0, QsciScintilla.MarginType.NumberMargin)
+        editor.setMarginWidth(0, "000")
+        editor.setMarginsForegroundColor(QColor("#ff888888"))
+        editor.setMarginsBackgroundColor(QColor("#282c34"))
+        editor.setMarginsFont(self.window_font)
+        
+        editor.keyPressEvent = self.HandleEditorPress
         return editor
 
+    def HandleEditorPress(self, e : QKeyEvent):
+        editor : QsciScintilla = self.tabView.currentWidget()
+        if e.modifiers() == Qt.KeyboardModifier.ControlModifier and e.key() == Qt.Key.Key_Space:
+            editor.autoCompleteFromAll()
+        else:
+            QsciScintilla.keyPressEvent(editor, e)
+        pass
+    
     def IsBinary(self, path : Path) -> bool:
         with open(path, "rb") as f:
             return b"\0" in f.read(1024)
     
     def SetNewTab(self, path : Path, isNewFile : bool = False) -> None:
+        editor : QsciScintilla = self.GetEditor()
+        if isNewFile:
+            self.tabView.addTab(editor, "untitled")
+            self.setWindowTitle("untitled")
+            self.statusBar().showMessage("Opened untitled")
+            self.tabView.setCurrentIndex(self.tabView.count() - 1)
+            self.currentFile = None
+            return
+        
         if not path.is_file():
             return
-        if not isNewFile and self.IsBinary(path):
+        if self.IsBinary(path):
             self.statusBar().showMessage("Cannot open binary file", 2000)
             return
         
-        if not isNewFile:
-            for i in range(self.tabView.count()):
-                if self.tabView.tabText(i) == path.name:
-                    self.tabView.setCurrentIndex(i)
-                    self.currentFile = path
-                    return
-        
-        editor = self.GetEditor()
+        for i in range(self.tabView.count()):
+            if self.tabView.tabText(i) == path.name:
+                self.tabView.setCurrentIndex(i)
+                self.currentFile = path
+                return
+
         self.tabView.addTab(editor, path.name)
-        if not isNewFile:
-            editor.setText(path.read_text())
+        editor.setText(path.read_text())
         self.setWindowTitle(path.name)
         self.currentFile = path
         self.tabView.setCurrentIndex(self.tabView.count() - 1)
