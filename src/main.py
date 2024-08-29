@@ -5,6 +5,7 @@ from PyQt5.Qsci import *
 
 from pathlib import Path
 from editor import Editor
+from fuzzy_searcher import SearchItem, SearchWorker
 
 import sys
 import os
@@ -16,6 +17,7 @@ class MainWindow(QMainWindow):
         super(QMainWindow, self).__init__()
         self.sideBarClr : str = "#282c34"
         self.currentFile : Path = None
+        self.currentSideBar : str = None
         
         self.InitUI()
         pass
@@ -125,6 +127,25 @@ class MainWindow(QMainWindow):
             editor.copy()
         pass
     
+    def GetFrame(self) -> QFrame:
+        frame : QFrame = QFrame()
+        frame.setFrameShape(QFrame.NoFrame)
+        frame.setFrameShadow(QFrame.Plain)
+        frame.setContentsMargins(0, 0, 0, 0)
+        frame.setStyleSheet('''
+            QFrame {
+                background-color: #21252b;
+                border-radius: 5px;
+                border: none;
+                padding: 5px;
+                color: #D3D3D3;    
+            }
+            QFrame:hover {
+                color: white;
+            }
+        ''')
+        return frame
+    
     def SetupBody(self) -> None:
         bodyFrame : QFrame = QFrame()
         bodyFrame.setFrameShape(QFrame.NoFrame)
@@ -144,38 +165,27 @@ class MainWindow(QMainWindow):
         self.sideBar.setStyleSheet(f'''
             background-color: {self.sideBarClr};
         ''')
-        sideBarLayout : QHBoxLayout = QHBoxLayout()
+        sideBarLayout : QVBoxLayout = QVBoxLayout()
         sideBarLayout.setContentsMargins(5, 10, 5, 0)
         sideBarLayout.setSpacing(0)
         sideBarLayout.setAlignment(Qt.AlignTop | Qt.AlignCenter)
         
-        folderLabel : QLabel = self.GetSideBarLabel("./src/icons/folder.svg", "folder.svg")
+        folderLabel : QLabel = self.GetSideBarLabel("./src/icons/folder.svg", "folder")
         sideBarLayout.addWidget(folderLabel)
+        searchLabel : QLabel = self.GetSideBarLabel("./src/icons/search.svg", "search")
+        sideBarLayout.addWidget(searchLabel)
         self.sideBar.setLayout(sideBarLayout)
         
-        body.addWidget(self.sideBar)
         self.hSplit : QSplitter = QSplitter(Qt.Horizontal)
-        self.treeFrame : QFrame = QFrame()
-        self.treeFrame.setContentsMargins(0, 0, 0, 0)
-        self.treeFrame.setLineWidth(1)
-        self.treeFrame.setMaximumWidth(400)
-        self.treeFrame.setMinimumWidth(200)
-        self.treeFrame.setBaseSize(100, 0)
-        treeLayout : QVBoxLayout = QVBoxLayout()
-        treeLayout.setContentsMargins(0, 0, 0, 0)
-        treeLayout.setSpacing(0)
-        self.treeFrame.setStyleSheet('''
-            QFrame {
-                background-color: #21252b;
-                border-radius: 5px;
-                border: none;
-                padding: 5px;
-                color: #D3D3D3;    
-            }
-            QFrame:hover {
-                color: white;
-            }
-        ''')
+        
+        self.fileFrame : QFrame = self.GetFrame()
+        self.fileFrame.setMaximumWidth(400)
+        self.fileFrame.setMinimumWidth(200)
+        
+        fileLayout : QVBoxLayout = QVBoxLayout()
+        fileLayout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        fileLayout.setContentsMargins(0, 0, 0, 0)
+        fileLayout.setSpacing(0)
         
         self.model : QFileSystemModel = QFileSystemModel()
         self.model.setRootPath(os.getcwd())
@@ -201,8 +211,68 @@ class MainWindow(QMainWindow):
         self.treeView.setColumnHidden(2, True)
         self.treeView.setColumnHidden(3, True)
         
-        treeLayout.addWidget(self.treeView)
-        self.treeFrame.setLayout(treeLayout)
+        
+        
+        self.searchFrame = self.GetFrame()
+        self.searchFrame.setMaximumWidth(400)
+        self.searchFrame.setMinimumWidth(200)
+        
+        searchLayout : QVBoxLayout = QVBoxLayout()
+        searchLabel.setAlignment(Qt.AlignmentFlag.AlignTop)
+        searchLayout.setContentsMargins(0, 10, 0, 0)
+        searchLayout.setSpacing(0)
+        searchLayout.setAlignment(Qt.AlignTop | Qt.AlignCenter)
+        
+        searchInput : QLineEdit = QLineEdit()
+        searchInput.setPlaceholderText("Search")
+        searchInput.setFont(self.window_font)
+        searchInput.setAlignment(Qt.AlignmentFlag.AlignTop)
+        searchInput.setStyleSheet("""
+            QLineEdit {
+                background-color : #21252b;
+                border-radius : 5px;
+                border : 1px solid #3D3D3D;
+                padding : 5px;
+                color : #3D3D3D;
+            }
+            QLineEdit:hover {
+                color : white;
+            }
+        """)
+        
+        self.searchBox : QCheckBox = QCheckBox("Search in modules")
+        self.searchBox.setFont(self.window_font)
+        self.searchBox.setStyleSheet("color : white; margin-bottom : 10px;")
+        
+        self.searchWorker : SearchWorker = SearchWorker()
+        self.searchWorker.finished.connect(self.SearchFinished)
+        
+        searchInput.textChanged.connect(
+            lambda text: self.searchWorker.Update(text, self.model.rootDirectory().absoluteFilePath(None), self.searchBox.isChecked())
+        )
+        
+        self.searchListView : QListWidget = QListWidget()
+        self.searchListView.setFont(QFont("FiraCode", 13))
+        self.searchListView.setStyleSheet("""
+            QListWidget {
+                background-color : #21252b;
+                border-radius : 5px;
+                border : 1px solid #3D3D3D;
+                padding : 5px;
+                color : white;
+            }
+        """)
+        self.searchListView.itemClicked.connect(self.SearchListClicked)
+        
+        searchLayout.addWidget(self.searchListView)
+        searchLayout.addSpacerItem(QSpacerItem(5, 5, QSizePolicy.Minimum, QSizePolicy.Minimum))
+        searchLayout.addWidget(searchInput)
+        self.searchFrame.setLayout(searchLayout)
+        
+        
+        
+        fileLayout.addWidget(self.treeView)
+        self.fileFrame.setLayout(fileLayout)
         
         self.tabView : QTabWidget = QTabWidget()
         self.tabView.setContentsMargins(0, 0, 0, 0)
@@ -211,19 +281,43 @@ class MainWindow(QMainWindow):
         self.tabView.setDocumentMode(True)
         self.tabView.tabCloseRequested.connect(self.CloseTab)
         
-        self.hSplit.addWidget(self.treeFrame)
+        self.hSplit.addWidget(self.fileFrame)
         self.hSplit.addWidget(self.tabView)
         
+        body.addWidget(self.sideBar)
         body.addWidget(self.hSplit)
         bodyFrame.setLayout(body)
         self.setCentralWidget(bodyFrame)
         pass
     
-    def ShowHideTab(self, e, type) -> None:
-        if self.treeFrame.isHidden():
-            self.treeFrame.show()
-        else:
-            self.treeFrame.hide()
+    def SearchListClicked(self, item : SearchItem):
+        self.SetNewTab(Path(item.fullPath))
+        editor : Editor = self.tabView.currentWidget()
+        editor.setFocus()
+        pass
+    
+    def SearchFinished(self, items) -> None:
+        self.searchListView.clear()
+        for i in items:
+            self.searchListView.addItem(i)
+        pass
+    
+    def ShowHideTab(self, e, type : str) -> None:
+        if type == "folder":
+            if not (self.fileFrame in self.hSplit.children()):
+                self.hSplit.replaceWidget(0, self.fileFrame)
+        elif type == "search":
+            if not (self.searchFrame in self.hSplit.children()):
+                self.hSplit.replaceWidget(0, self.searchFrame)
+        
+        if self.currentSideBar == type:
+            frame = self.hSplit.children()[0]
+            if frame.isHidden():
+                frame.show()
+            else:
+                frame.hide()
+        
+        self.currentSideBar = type
         pass
     
     def CloseTab(self, index : int) -> None:
@@ -278,12 +372,21 @@ class MainWindow(QMainWindow):
     
     def GetSideBarLabel(self, path, name) -> QLabel:
         label : QLabel = QLabel()
-        label.setPixmap(QPixmap(path).scaled(QSize(25, 25)))
+        label.setPixmap(QPixmap(path).scaled(QSize(30, 30)))
         label.setAlignment(Qt.AlignmentFlag.AlignTop)
         label.setFont(self.window_font)
         label.mousePressEvent = lambda e: self.ShowHideTab(e, name)
+        label.enterEvent = self.SetCursorPointer
+        label.leaveEvent = self.SetCursorArrow
         return label
 
+    def SetCursorPointer(self, e) -> None:
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        pass
+    
+    def SetCursorArrow(self, e) -> None:
+        self.setCursor(Qt.CursorShape.ArrowCursor)
+        pass
 
 if __name__ == "__main__":
     app : QApplication = QApplication([])

@@ -3,5 +3,16 @@
 <qresource prefix="icons">
     <file>close.svg</file>
     <file>folder.svg</file>
+    <file>search.svg</file>
+    <file>save.svg</file>
+    <file>play.svg</file>
+    <file>pause.svg</file>
+    <file>stop.svg</file>
+    <file>add.svg</file>
+    <file>cog.svg</file>
+    <file>files-copy.svg</file>
+    <file>folder-open.svg</file>
+    <file>arrow-down-to-line.svg</file>
+    <file>arrow-down-from-line.svg</file>
 </qresource>
 </RCC>
