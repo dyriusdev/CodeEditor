@@ -149,7 +149,7 @@ class PyCustomLexer(QsciLexerCustom):
                 bracOrColon, _ = SkipSpacePeek(ni)
                 if name[0].isidentifier() and bracOrColon[0] in (":", "("):
                     self.setStyling(tokenLen, self.KEYWORD)
-                    _ = SkipSpacePeek(ni)
+                    _ = GetNextToken(ni)
                     self.setStyling(name[1] + 1, self.CLASSES)
                     continue
                 else:
@@ -164,6 +164,8 @@ class PyCustomLexer(QsciLexerCustom):
                     continue
                 else:
                     self.setStyling(tokenLen, self.KEYWORD)
+                    continue
+            
             elif token in self.KEYWORD_LIST:
                 self.setStyling(tokenLen, self.KEYWORD)
             elif token.isnumeric() or token == "self":
