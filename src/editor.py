@@ -5,6 +5,8 @@ from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 from PyQt5.QtWidgets import QWidget
 
+from lexer import PyCustomLexer
+
 import keyword
 import pkgutil
 
@@ -29,15 +31,15 @@ class Editor(QsciScintilla):
         self.setAutoCompletionCaseSensitivity(False)
         self.setAutoCompletionUseSingle(QsciScintilla.AcusNever)
         
-        #editor.setCaretForegroundColor(QColor("#dedcdc"))
+        self.setCaretForegroundColor(QColor("#dedcdc"))
         self.setCaretLineVisible(True)
         self.setCaretWidth(2)
-        #editor.setCaretLineBackgroundColor(QColor("#2c313c"))
+        self.setCaretLineBackgroundColor(QColor("#2c313c"))
         
         self.setEolMode(QsciScintilla.EolUnix)
         self.setEolVisibility(False)
         
-        self.pyLexer : QsciLexerPython = QsciLexerPython()
+        self.pyLexer : PyCustomLexer = PyCustomLexer(self)
         self.pyLexer.setDefaultFont(self.window_font)
         
         self.api : QsciAPIs = QsciAPIs(self.pyLexer)
