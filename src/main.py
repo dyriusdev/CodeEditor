@@ -3,12 +3,11 @@ from PyQt5.Qsci import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 from pathlib import Path
+from editor import Editor
 
 import sys
 import os
-import keyword
-import pkgutil
-
+import resources
 
 class MainWindow(QMainWindow):
     
@@ -149,11 +148,7 @@ class MainWindow(QMainWindow):
         sideBarLayout.setSpacing(0)
         sideBarLayout.setAlignment(Qt.AlignTop | Qt.AlignCenter)
         
-        folderLabel : QLabel = QLabel()
-        folderLabel.setPixmap(QPixmap("./src/icons/folder.svg").scaled(QSize(25, 25)))
-        folderLabel.setAlignment(Qt.AlignmentFlag.AlignTop)
-        folderLabel.setFont(self.window_font)
-        folderLabel.mousePressEvent = self.ShowHideTab()
+        folderLabel : QLabel = self.GetSideBarLabel("./src/icons/folder.svg", "folder.svg")
         sideBarLayout.addWidget(folderLabel)
         self.sideBar.setLayout(sideBarLayout)
         
@@ -223,7 +218,11 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(bodyFrame)
         pass
     
-    def ShowHideTab(self) -> None:
+    def ShowHideTab(self, e, type) -> None:
+        if self.treeFrame.isHidden():
+            self.treeFrame.show()
+        else:
+            self.treeFrame.hide()
         pass
     
     def CloseTab(self, index : int) -> None:
@@ -239,66 +238,15 @@ class MainWindow(QMainWindow):
         self.SetNewTab(p)
         pass
     
-    def GetEditor(self) -> QsciScintilla:
-        editor : QsciScintilla = QsciScintilla()
-        editor.setUtf8(True)
-        editor.setFont(self.window_font)
-        editor.setBraceMatching(QsciScintilla.SloppyBraceMatch)
-        
-        editor.setIndentationGuides(True)
-        editor.setTabWidth(4)
-        editor.setIndentationsUseTabs(False)
-        editor.setAutoIndent(True)
-        
-        editor.setAutoCompletionSource(QsciScintilla.AutoCompletionSource.AcsAll)
-        editor.setAutoCompletionThreshold(1)
-        editor.setAutoCompletionCaseSensitivity(False)
-        editor.setAutoCompletionUseSingle(QsciScintilla.AcusNever)
-        
-        #editor.setCaretForegroundColor(QColor("#dedcdc"))
-        editor.setCaretLineVisible(True)
-        editor.setCaretWidth(2)
-        #editor.setCaretLineBackgroundColor(QColor("#2c313c"))
-        
-        editor.setEolMode(QsciScintilla.EolUnix)
-        editor.setEolVisibility(False)
-        
-        self.pyLexer : QsciLexerPython = QsciLexerPython()
-        self.pyLexer.setDefaultFont(self.window_font)
-        
-        self.api : QsciAPIs = QsciAPIs(self.pyLexer)
-        for key in keyword.kwlist + dir(__builtins__):
-            self.api.add(key)
-        
-        for _, name, _ in pkgutil.iter_modules():
-            self.api.add(name)
-        
-        self.api.prepare()
-        editor.setLexer(self.pyLexer)
-        
-        editor.setMarginType(0, QsciScintilla.MarginType.NumberMargin)
-        editor.setMarginWidth(0, "000")
-        editor.setMarginsForegroundColor(QColor("#ff888888"))
-        editor.setMarginsBackgroundColor(QColor("#282c34"))
-        editor.setMarginsFont(self.window_font)
-        
-        editor.keyPressEvent = self.HandleEditorPress
-        return editor
-
-    def HandleEditorPress(self, e : QKeyEvent):
-        editor : QsciScintilla = self.tabView.currentWidget()
-        if e.modifiers() == Qt.KeyboardModifier.ControlModifier and e.key() == Qt.Key.Key_Space:
-            editor.autoCompleteFromAll()
-        else:
-            QsciScintilla.keyPressEvent(editor, e)
-        pass
+    def GetEditor(self) -> Editor:
+        return Editor()
     
     def IsBinary(self, path : Path) -> bool:
         with open(path, "rb") as f:
             return b"\0" in f.read(1024)
     
     def SetNewTab(self, path : Path, isNewFile : bool = False) -> None:
-        editor : QsciScintilla = self.GetEditor()
+        editor : Editor = self.GetEditor()
         if isNewFile:
             self.tabView.addTab(editor, "untitled")
             self.setWindowTitle("untitled")
@@ -326,7 +274,14 @@ class MainWindow(QMainWindow):
         self.tabView.setCurrentIndex(self.tabView.count() - 1)
         self.statusBar().showMessage(f"Opened {path.name}", 2000)
         pass
-
+    
+    def GetSideBarLabel(self, path, name) -> QLabel:
+        label : QLabel = QLabel()
+        label.setPixmap(QPixmap(path).scaled(QSize(25, 25)))
+        label.setAlignment(Qt.AlignmentFlag.AlignTop)
+        label.setFont(self.window_font)
+        label.mousePressEvent = lambda e: self.ShowHideTab(e, name)
+        return label
 
 
 if __name__ == "__main__":
