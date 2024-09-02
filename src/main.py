@@ -264,9 +264,10 @@ class MainWindow(QMainWindow):
         """)
         self.searchListView.itemClicked.connect(self.SearchListClicked)
         
-        searchLayout.addWidget(self.searchListView)
-        searchLayout.addSpacerItem(QSpacerItem(5, 5, QSizePolicy.Minimum, QSizePolicy.Minimum))
+        searchLayout.addWidget(self.searchBox)
         searchLayout.addWidget(searchInput)
+        searchLayout.addSpacerItem(QSpacerItem(5, 5, QSizePolicy.Minimum, QSizePolicy.Minimum))
+        searchLayout.addWidget(self.searchListView)
         self.searchFrame.setLayout(searchLayout)
         
         
@@ -293,6 +294,7 @@ class MainWindow(QMainWindow):
     def SearchListClicked(self, item : SearchItem):
         self.SetNewTab(Path(item.fullPath))
         editor : Editor = self.tabView.currentWidget()
+        editor.setCursorPosition(item.lineOn, item.end)
         editor.setFocus()
         pass
     
@@ -333,15 +335,15 @@ class MainWindow(QMainWindow):
         self.SetNewTab(p)
         pass
     
-    def GetEditor(self) -> Editor:
-        return Editor()
+    def GetEditor(self, path : Path, isPythonFile : bool = True) -> Editor:
+        return Editor(path=path, isPythonFile=isPythonFile)
     
     def IsBinary(self, path : Path) -> bool:
         with open(path, "rb") as f:
             return b"\0" in f.read(1024)
     
     def SetNewTab(self, path : Path, isNewFile : bool = False) -> None:
-        editor : Editor = self.GetEditor()
+        editor : Editor = self.GetEditor(path, path.suffix in {".py", ".pyw"})
         if isNewFile:
             self.tabView.addTab(editor, "untitled")
             self.setWindowTitle("untitled")
